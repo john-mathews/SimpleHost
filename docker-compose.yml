@@ -1,0 +1,15 @@
+services:
+  client:
+    build: ./Client
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Client:/app
+      - /app/node_modules
+  server:
+    build: ./Server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Server/Database:/app/Database
+

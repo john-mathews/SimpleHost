@@ -2,6 +2,9 @@
 node_modules/
 .env
 
+# Client
+client/package-lock.json
+
 # Build output
 dist/
 build/

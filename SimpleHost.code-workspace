@@ -1,0 +1,23 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "path": "Client"
+        },
+        {
+            "path": "Server"
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/.git": true,
+            "**/node_modules": true,
+            "**/bin": true,
+            "**/obj": true
+        },
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    }
+}

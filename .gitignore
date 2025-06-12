@@ -1,0 +1,44 @@
+# Node.js
+node_modules/
+.env
+
+# Build output
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+bin/
+
+# SQLite database
+Server/Database/*.db
+
+# VSCode
+.vscode/
+
+# Docker
+**/.dockerignore
+
+# Misc
+*.log
+*.tmp
+
+# Ignore local git repo in Server if it exists
+Server/.git/

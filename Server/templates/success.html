@@ -1,0 +1,32 @@
+<!-- success.html as a standalone HTML file -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Success!</title>
+    <style>
+        body { font-family: sans-serif; background: #f7f7f7; }
+        .container { max-width: 400px; margin: 40px auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
+        input, button { font-size: 1em; padding: 0.5em; margin-top: 0.5em; width: 100%; }
+        .error { color: red; margin-top: 1em; }
+        .success { color: green; margin-top: 1em; }
+        .center { text-align: center; }
+        .mt-2 { margin-top: 1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="center">Welcome, {{.Username}}!</h2>
+        <form action="/success-message" method="get">
+            <button type="submit">Get Happy Success Message</button>
+        </form>
+        <div id="message" class="center mt-2">{{.Message}}</div>
+        <div class="center mt-2">
+            <form action="/logout" method="post">
+                <button type="submit">Logout</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

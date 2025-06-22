@@ -1,0 +1,51 @@
+{{template "base" .}}
+
+{{define "title"}}Home{{end}}
+{{define "uploader"}}
+    <file-uploader></file-uploader>
+{{end}}
+{{define "content"}}
+    <h3 class="center">Files</h3>
+    <div class="files-header center">
+        <input type="text" id="new-folder-name" name="name" placeholder="New folder name" style="width: 60%; display: inline-block; margin-right: 0.5em;">
+        <button id="create-folder-btn" disabled
+            hx-post="/api/create-folder"
+            hx-include="#new-folder-name"
+            hx-vals='{"parent_id": "{{.CurrentFolderID}}"}'
+            hx-params="*"
+            hx-headers='{"Content-Type": "application/x-www-form-urlencoded"}'
+            hx-trigger="click"
+            hx-target="#files-list"
+            hx-swap="afterbegin">
+            Create Folder
+        </button>
+        <button 
+            id="refresh-btn"
+            hx-get="/api/files-list?folder={{.CurrentFolderID}}" 
+            hx-target="#files-list" 
+            hx-swap="innerHTML">
+            Refresh
+        </button>
+    </div>
+    <div id="files-list" class="files-container center"
+        hx-get="/api/files-list?folder={{.CurrentFolderID}}"
+        hx-trigger="load"
+        hx-target="#files-list"
+        hx-swap="innerHTML">
+        <!-- Files will be listed here -->
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var input = document.getElementById('new-folder-name');
+        var btn = document.getElementById('create-folder-btn');
+        if (input && btn) {
+            function toggleBtn() {
+                btn.disabled = input.value.trim() === '';
+            }
+            input.addEventListener('input', toggleBtn);
+            input.addEventListener('change', toggleBtn);
+            toggleBtn(); // initial state
+        }
+    });
+    </script>
+{{end}}

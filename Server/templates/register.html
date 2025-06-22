@@ -1,21 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register</title>
-    <style>
-        body { font-family: sans-serif; background: #f7f7f7; }
-        .container { max-width: 400px; margin: 40px auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
-        input, button { font-size: 1em; padding: 0.5em; margin-top: 0.5em; width: 100%; }
-        .error { color: red; margin-top: 1em; }
-        .success { color: green; margin-top: 1em; }
-        .center { text-align: center; }
-        .mt-2 { margin-top: 1em; }
-    </style>
-</head>
-<body>
-    <div class="container">
+{{template "base" .}}
+
+{{define "title"}}Register{{end}}
+{{define "content"}}
         <h2 class="center">Create Account</h2>
         <form action="/register" method="post">
             <input type="email" name="email" placeholder="Email" required>
@@ -28,6 +14,4 @@
         <div class="center mt-2">
             <a href="/login">Already have an account? Login</a>
         </div>
-    </div>
-</body>
-</html>
+{{end}}

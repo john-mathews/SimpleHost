@@ -1,0 +1,13 @@
+{{/* Partial template for files/folders list, rendered by FolderListPartialHandler */}}
+<div class="files-list-grid">
+  {{range .Folders}}
+    {{template "folder_item_partial.html" .}}
+  {{end}}
+  {{range .Files}}
+    <div class="file-item">
+      <span class="icon">📄</span>
+      <span class="name">{{.Name}}</span>
+      <a href="/api/download?fileId={{.ID}}" class="download-link" title="Download">⬇️</a>
+    </div>
+  {{end}}
+</div>

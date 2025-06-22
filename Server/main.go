@@ -13,10 +13,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var templates *template.Template
+const templateFolderPath = "templates"
 
 func initDB() *sql.DB {
-	db, err := sql.Open("sqlite3", "./Database/users.db")
+	db, err := sql.Open("sqlite3", "./Database/simplehost.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,30 +33,34 @@ func initDB() *sql.DB {
 	return db
 }
 
-func loadTemplates() {
-	templates = template.Must(template.ParseGlob(filepath.Join("templates", "*.html")))
-}
-
 func render(w http.ResponseWriter, _ *http.Request, name string, data any) {
-	t := templates.Lookup(name)
-	if t == nil {
-		http.Error(w, "Template not found: "+name, http.StatusInternalServerError)
+	tmpl, err := template.New("").ParseFiles(filepath.Join(templateFolderPath, name), filepath.Join(templateFolderPath, "base.html"))
+	if err != nil {
+		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
-
-	err := t.Execute(w, data)
-
-	// err := templates.ExecuteTemplate(w, name, data)
+	err = tmpl.ExecuteTemplate(w, "base", data)
 	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error executing template", http.StatusInternalServerError)
+		return
 	}
 }
 
 func main() {
 	db := initDB()
 	defer db.Close()
-	models.SetDB(db)
-	loadTemplates()
+	models.SetUserDB(db)
+	models.SetFSDB(db)
+
+	// Initialize virtual filesystem tables
+	if err := models.InitVirtualFileSystemTables(); err != nil {
+		log.Fatalf("Failed to initialize virtual filesystem tables: %v", err)
+	}
+	// Ensure root folder exists
+	if err := models.EnsureRootFolder(); err != nil {
+		log.Fatalf("Failed to create root folder: %v", err)
+	}
+
 	router := http.NewServeMux()
 
 	router.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +68,16 @@ func main() {
 			render(w, r, "login.html", nil)
 			return
 		}
-		controllers.LoginHandler(w, r, render)
+		// After successful login, redirect to /simplehost
+		controllers.LoginHandler(w, r, func(w http.ResponseWriter, r *http.Request, name string, data any) {
+			// If login is successful, LoginHandler should set the cookie and redirect
+			// If not, render login.html with error
+			if err, ok := data.(error); ok && err != nil {
+				render(w, r, "login.html", map[string]any{"Error": err.Error()})
+			} else {
+				http.Redirect(w, r, "/simplehost", http.StatusSeeOther)
+			}
+		})
 	})
 
 	router.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
@@ -75,19 +88,17 @@ func main() {
 		controllers.RegisterHandler(w, r, render)
 	})
 
-	router.HandleFunc("/success", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := controllers.GetUserClaims(r); err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			render(w, r, "404.html", nil)
-			return
-		}
+	router.HandleFunc("/success", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		controllers.SuccessPageHandler(w, r, render)
-	})
+	}))
 
-	// Success message route now uses the new handler
-	router.HandleFunc("/success-message", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/simplehost", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		render(w, r, "simplehost.html", nil)
+	}))
+
+	router.HandleFunc("/success-message", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		controllers.SuccessMessageHandler(w, r, render)
-	})
+	}))
 
 	router.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
 		controllers.LogoutHandler(w, r, render)
@@ -100,11 +111,25 @@ func main() {
 		render(w, r, "404.html", nil)
 	})
 
+	// Serve static files from /static/ mapped to templates directory
+	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("templates"))))
+
+	router.HandleFunc("/api/upload", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		controllers.UploadHandler(w, r)
+	}))
+
+	// router.HandleFunc("/api/folder", controllers.AuthMiddleware(controllers.FolderChildrenAPIHandler))
+
+	router.HandleFunc("/api/files-list", controllers.AuthMiddleware(controllers.FolderListPartialHandler))
+
+	router.HandleFunc("/api/create-folder", controllers.AuthMiddleware(controllers.CreateFolderAPIHandler))
+
 	// Catch-all handler for root and unknown routes
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// Keep this at the end to catch all unmatched routes
+	router.HandleFunc("/", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		render(w, r, "404.html", nil)
-	})
+	}))
 
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", router)

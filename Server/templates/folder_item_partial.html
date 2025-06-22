@@ -1,0 +1,5 @@
+{{/* Partial template for a single folder item, for htmx swap */}}
+<div class="file-item folder-item" hx-get="/api/files-list?folderId={{.ID}}" hx-target="#files-list" hx-swap="innerHTML">
+  <span class="icon">📁</span>
+  <span class="name">{{.Name}}</span>
+</div>

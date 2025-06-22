@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"os"
@@ -21,8 +22,9 @@ func getJWTSecret() string {
 	return secret
 }
 
-func GenerateJWT(username string) (string, error) {
+func GenerateJWT(userId, username string) (string, error) {
 	claims := jwt.MapClaims{
+		"userId":   userId,
 		"username": username,
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 	}
@@ -52,7 +54,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, render func(http.Respo
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	if models.VerifyUser(username, password) {
-		token, err := GenerateJWT(username)
+		user, err := models.GetUserByUsername(username)
+		if err != nil {
+			render(w, r, "login.html", map[string]any{"Error": "Server error"})
+			return
+		}
+		token, err := GenerateJWT(user.ID, username)
 		if err != nil {
 			render(w, r, "login.html", map[string]any{"Error": "Server error"})
 			return
@@ -65,7 +72,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, render func(http.Respo
 			SameSite: http.SameSiteLaxMode,
 		}
 		http.SetCookie(w, cookie)
-		http.Redirect(w, r, "/success", http.StatusSeeOther)
+		http.Redirect(w, r, "/simplehost", http.StatusSeeOther)
 	} else {
 		render(w, r, "login.html", map[string]any{"Error": "Invalid username or password"})
 	}
@@ -128,17 +135,6 @@ func SuccessPageHandler(w http.ResponseWriter, r *http.Request, render func(http
 	render(w, r, "success.html", data)
 }
 
-func getUserClaimsUsername(r *http.Request) string {
-	claims, err := getUserClaims(r)
-	if err != nil {
-		return ""
-	}
-	if username, ok := claims["username"].(string); ok {
-		return username
-	}
-	return ""
-}
-
 func LogoutHandler(w http.ResponseWriter, r *http.Request, render func(http.ResponseWriter, *http.Request, string, any)) {
 	cookie := &http.Cookie{
 		Name:     "jwt",
@@ -152,9 +148,17 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request, render func(http.Resp
 	render(w, r, "login.html", map[string]any{"Error": template.HTML(`<span class='success'>Logged out.</span>`)})
 }
 
-// Export getUserClaims so it can be used in main.go
-func GetUserClaims(r *http.Request) (map[string]any, error) {
-	return getUserClaims(r)
+// AuthMiddleware wraps a handler and ensures the user is authenticated
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uc, err := getUserClaims(r)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		ctx := context.WithValue(r.Context(), "claims", uc)
+		next(w, r.WithContext(ctx))
+	}
 }
 
 func getUserClaims(r *http.Request) (map[string]any, error) {

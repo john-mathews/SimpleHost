@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func SuccessMessageHandler(w http.ResponseWriter, r *http.Request, render func(http.ResponseWriter, *http.Request, string, any)) {
+func SuccessMessageHandler(w http.ResponseWriter, r *http.Request, _ func(http.ResponseWriter, *http.Request, string, any)) {
 	if _, err := getUserClaims(r); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -23,6 +23,6 @@ func SuccessMessageHandler(w http.ResponseWriter, r *http.Request, render func(h
 		"Fantastic! All systems go!",
 	}
 	msg := messages[rand.Intn(len(messages))]
-	data := map[string]any{"Username": getUserClaimsUsername(r), "Message": msg}
-	render(w, r, "success.html", data)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(msg))
 }

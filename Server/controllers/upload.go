@@ -92,10 +92,14 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Unauthorized: No valid user found", http.StatusUnauthorized)
 			return
 		}
+		folderID := r.FormValue("folder_id")
+		if folderID == "" {
+			folderID = "root"
+		}
 		fileRecord := models.File{
 			ID:           uniqueName, // Use uniqueName as ID for now, or use uuid if available
 			Name:         uniqueName,
-			FolderID:     "root", // Placeholder, update as needed
+			FolderID:     folderID,
 			StoragePath:  dstPath,
 			OwnerID:      ownerID,
 			UploadedDate: time.Now(),

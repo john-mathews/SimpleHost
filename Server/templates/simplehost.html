@@ -6,12 +6,12 @@
 {{end}}
 {{define "content"}}
     <h3 class="center">Files</h3>
+    <div id="breadcrumbs" class="breadcrumbs center" style="margin-bottom: 1em;"></div>
     <div class="files-header center">
         <input type="text" id="new-folder-name" name="name" placeholder="New folder name" style="width: 60%; display: inline-block; margin-right: 0.5em;">
         <button id="create-folder-btn" disabled
             hx-post="/api/create-folder"
             hx-include="#new-folder-name"
-            hx-vals='{"parent_id": "{{.CurrentFolderID}}"}'
             hx-params="*"
             hx-headers='{"Content-Type": "application/x-www-form-urlencoded"}'
             hx-trigger="click"
@@ -21,20 +21,52 @@
         </button>
         <button 
             id="refresh-btn"
-            hx-get="/api/files-list?folder={{.CurrentFolderID}}" 
+            hx-get="/api/files-list?folderId=root" 
             hx-target="#files-list" 
             hx-swap="innerHTML">
             Refresh
         </button>
     </div>
     <div id="files-list" class="files-container center"
-        hx-get="/api/files-list?folder={{.CurrentFolderID}}"
+        hx-get="/api/files-list?folderId=root"
         hx-trigger="load"
         hx-target="#files-list"
         hx-swap="innerHTML">
         <!-- Files will be listed here -->
     </div>
     <script>
+    function renderBreadcrumbs(path) {
+        const container = document.getElementById('breadcrumbs');
+        if (!container) return;
+        container.innerHTML = '';
+        path.forEach(function(folder, idx) {
+            if (idx > 0) container.appendChild(document.createTextNode(' / '));
+            if (idx === path.length - 1) {
+                // Current folder: bold and highlighted
+                const span = document.createElement('span');
+                span.textContent = folder.Name;
+                span.style.fontWeight = 'bold';
+                span.style.background = '#ffe082';
+                span.style.padding = '0 0.3em';
+                container.appendChild(span);
+            } else {
+                // Parent: clickable
+                const a = document.createElement('a');
+                a.textContent = folder.Name;
+                a.href = '?folderId=' + encodeURIComponent(folder.ID);
+                a.style.textDecoration = 'underline';
+                a.style.cursor = 'pointer';
+                container.appendChild(a);
+            }
+        });
+    }
+    function loadBreadcrumbs() {
+        const params = new URLSearchParams(window.location.search);
+        const folderId = params.get('folderId') || 'root';
+        fetch('/api/breadcrumbs?folderId=' + encodeURIComponent(folderId))
+            .then(r => r.json())
+            .then(renderBreadcrumbs);
+    }
     document.addEventListener('DOMContentLoaded', function() {
         var input = document.getElementById('new-folder-name');
         var btn = document.getElementById('create-folder-btn');
@@ -45,6 +77,31 @@
             input.addEventListener('input', toggleBtn);
             input.addEventListener('change', toggleBtn);
             toggleBtn(); // initial state
+        }
+        loadBreadcrumbs();
+    });
+    // Also reload breadcrumbs on folder navigation (HTMX swaps)
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.target && evt.target.id === 'files-list') {
+            loadBreadcrumbs();
+        }
+    });
+    // Dynamically set folderId for refresh and create folder requests
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        const params = new URLSearchParams(window.location.search);
+        const folderId = params.get('folderId') || 'root';
+        // Refresh button
+        if (evt.target && evt.target.id === 'refresh-btn') {
+            evt.detail.path = '/api/files-list?folderId=' + encodeURIComponent(folderId);
+        }
+        // Create folder button
+        if (evt.target && evt.target.id === 'create-folder-btn') {
+            evt.detail.parameters = evt.detail.parameters || {};
+            evt.detail.parameters['parent_id'] = folderId;
+        }
+        // Files list initial load
+        if (evt.target && evt.target.id === 'files-list') {
+            evt.detail.path = '/api/files-list?folderId=' + encodeURIComponent(folderId);
         }
     });
     </script>

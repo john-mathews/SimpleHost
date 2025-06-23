@@ -4,10 +4,10 @@
     {{template "folder_item_partial.html" .}}
   {{end}}
   {{range .Files}}
-    <div class="file-item">
+    <div class="file-item" hx-get="/api/download?fileId={{.ID}}">
       <span class="icon">📄</span>
       <span class="name">{{.Name}}</span>
-      <a href="/api/download?fileId={{.ID}}" class="download-link" title="Download">⬇️</a>
+      <span>⬇️</span>
     </div>
   {{end}}
 </div>

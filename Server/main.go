@@ -124,6 +124,12 @@ func main() {
 
 	router.HandleFunc("/api/create-folder", controllers.AuthMiddleware(controllers.CreateFolderAPIHandler))
 
+	// Download endpoint
+	router.HandleFunc("/api/download", controllers.AuthMiddleware(controllers.DownloadHandler))
+
+	// Breadcrumbs endpoint
+	router.HandleFunc("/api/breadcrumbs", controllers.AuthMiddleware(controllers.BreadcrumbsHandler))
+
 	// Catch-all handler for root and unknown routes
 	// Keep this at the end to catch all unmatched routes
 	router.HandleFunc("/", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {

@@ -40,7 +40,7 @@ func FolderChildrenAPIHandler(w http.ResponseWriter, r *http.Request) {
 
 // FolderListPartialHandler renders the files/folders list as HTML for htmx
 func FolderListPartialHandler(w http.ResponseWriter, r *http.Request) {
-	folderID := r.URL.Query().Get("folder")
+	folderID := r.URL.Query().Get("folderId")
 	if folderID == "" {
 		folderID = "root"
 	}

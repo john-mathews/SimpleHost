@@ -57,6 +57,10 @@ class FileUploader extends HTMLElement {
         for (const file of fileList) {
             formData.append('file', file, file.name);
         }
+        // Add current folder id from URL as folder_id
+        const params = new URLSearchParams(window.location.search);
+        const folderId = params.get('folderId') || 'root';
+        formData.append('folder_id', folderId);
         fetch('/api/upload', {
             method: 'POST',
             body: formData

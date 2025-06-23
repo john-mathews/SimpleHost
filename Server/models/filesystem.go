@@ -100,7 +100,7 @@ func EnsureRootFolder() error {
 	return nil
 }
 
-// GetFolderPath returns all folders in the path from the given folder id up to root
+// GetFolderPath returns all folders in the path from the given folder id up to root (always includes root)
 func GetFolderPath(folderID string) ([]Folder, error) {
 	var path []Folder
 	currentID := folderID
@@ -113,7 +113,10 @@ func GetFolderPath(folderID string) ([]Folder, error) {
 		}
 		f.ParentID = parentID
 		path = append([]Folder{f}, path...)
-		if !parentID.Valid || parentID.String == "root" {
+		if currentID == "root" {
+			break
+		}
+		if !parentID.Valid {
 			break
 		}
 		currentID = parentID.String
@@ -166,4 +169,17 @@ func GetFolderChildren(folderID, userID string) ([]Folder, []File, error) {
 	}
 
 	return folders, files, nil
+}
+
+// GetFileByID returns a File by its ID
+func GetFileByID(fileID string) (*File, error) {
+	var file File
+	var uploaded time.Time
+	err := db.QueryRow(`SELECT id, name, folder_id, storage_path, owner_id, uploaded_date, is_private FROM files WHERE id = ?`, fileID).
+		Scan(&file.ID, &file.Name, &file.FolderID, &file.StoragePath, &file.OwnerID, &uploaded, &file.IsPrivate)
+	if err != nil {
+		return nil, err
+	}
+	file.UploadedDate = uploaded
+	return &file, nil
 }

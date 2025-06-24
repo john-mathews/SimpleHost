@@ -1,0 +1,16 @@
+{{template "base" .}}
+
+{{define "title"}}Login{{end}}
+{{define "content"}}
+        <h2 class="center">Login</h2>
+        <form action="/login" method="post">
+            <input type="text" name="username" placeholder="Username" required autofocus>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+            {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+        </form>
+        <div class="center mt-2">
+            <a href="/register">Create Account</a>
+        </div>
+{{end}}
+

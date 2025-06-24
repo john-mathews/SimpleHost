@@ -2,13 +2,14 @@ package models
 
 import (
 	"database/sql"
+
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var DB *sql.DB
 
-func SetDB(db *sql.DB) {
+func SetUserDB(db *sql.DB) {
 	DB = db
 }
 
@@ -39,4 +40,13 @@ func VerifyUser(username, password string) bool {
 		return false
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+func GetUserByUsername(username string) (*User, error) {
+	var user User
+	err := DB.QueryRow("SELECT id, username, email, password FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Email, &user.Password)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

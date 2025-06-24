@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -116,8 +117,9 @@ func main() {
 		render(w, r, "404.html", nil)
 	})
 
-	// Serve static files from /static/ mapped to templates directory
-	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("templates"))))
+	// Serve static files (uploader.js) from embedded FS
+	staticFiles, _ := fs.Sub(shared.StaticFS, "templates")
+	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFiles))))
 
 	router.HandleFunc("/api/upload", controllers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		controllers.UploadHandler(w, r)

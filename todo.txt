@@ -22,3 +22,5 @@ make files private (only owner can see)
 View images and videos
 
 preview other files as well
+
+move files to new folders

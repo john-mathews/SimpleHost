@@ -1,0 +1,24 @@
+Add Filters 
+    folders
+    file type
+    owner
+    size
+    date uploaded
+
+"Flat" mode
+    instead of hierarchy just lists all files
+    would use this mode when searching
+
+
+Search
+    search by name
+
+Table and grid mode
+
+Delete and rename files
+
+make files private (only owner can see)
+
+View images and videos
+
+preview other files as well

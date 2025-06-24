@@ -8,6 +8,8 @@ import (
 	"simplehost-server/models"
 	"strings"
 
+	"simplehost-server/shared" // Import shared for TemplatesFS
+
 	"github.com/google/uuid"
 )
 
@@ -57,7 +59,7 @@ func FolderListPartialHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("<div class='error'>Error loading files</div>"))
 		return
 	}
-	tmpl, err := template.ParseFiles("templates/files_list_partial.html", "templates/folder_item_partial.html")
+	tmpl, err := template.ParseFS(shared.TemplatesFS, "templates/files_list_partial.html", "templates/folder_item_partial.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("<div class='error'>Template error</div>"))
@@ -108,7 +110,7 @@ func CreateFolderAPIHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl, err := template.ParseFiles("templates/folder_item_partial.html")
+	tmpl, err := template.ParseFS(shared.TemplatesFS, "templates/folder_item_partial.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("<div class='error'>Template error</div>"))

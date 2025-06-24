@@ -5,18 +5,23 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"path/filepath"
+	"os"
 
 	"simplehost-server/controllers"
 	"simplehost-server/models"
+	"simplehost-server/shared"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const templateFolderPath = "templates"
 
 func initDB() *sql.DB {
-	db, err := sql.Open("sqlite3", "./Database/simplehost.db")
+	dbDir := "./Database"
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		log.Fatalf("Failed to create database directory: %v", err)
+	}
+	db, err := sql.Open("sqlite", dbDir+"/simplehost.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -34,7 +39,7 @@ func initDB() *sql.DB {
 }
 
 func render(w http.ResponseWriter, _ *http.Request, name string, data any) {
-	tmpl, err := template.New("").ParseFiles(filepath.Join(templateFolderPath, name), filepath.Join(templateFolderPath, "base.html"))
+	tmpl, err := template.New("").ParseFS(shared.TemplatesFS, templateFolderPath+"/"+name, templateFolderPath+"/base.html")
 	if err != nil {
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return

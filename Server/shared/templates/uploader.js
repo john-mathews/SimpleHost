@@ -85,52 +85,70 @@ class FileUploader extends HTMLElement {
             this.uploadFiles(e.dataTransfer.files, status, progressBar);
         });
     }
-    uploadFiles(fileList, status, progressBar) {
-        const formData = new FormData();
-        for (const file of fileList) {
-            formData.append('file', file, file.webkitRelativePath || file.name);
-        }
-        // Add current folder id from URL as folder_id
+    async uploadFiles(fileList, status, progressBar) {
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
         const params = new URLSearchParams(window.location.search);
         const folderId = params.get('folderId') || 'root';
-        formData.append('folder_id', folderId);
-
-        // Use XMLHttpRequest for progress
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/upload', true);
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                progressBar.style.display = '';
-                progressBar.value = (e.loaded / e.total) * 100;
-            }
-        };
-        xhr.onload = function() {
-            progressBar.style.display = 'none';
-            progressBar.value = 0;
-            status.textContent = xhr.responseText;
-            // Auto-refresh file list after upload
-            const filesList = window.parent ? window.parent.document.getElementById('files-list') : document.getElementById('files-list');
-            if (filesList) {
-                // Use HTMX if available
-                if (window.parent && window.parent.htmx) {
-                    window.parent.htmx.trigger(filesList, 'refresh');
-                } else if (window.htmx) {
-                    window.htmx.trigger(filesList, 'refresh');
-                } else {
-                    // Fallback: reload the page
-                    window.location.reload();
-                }
-            }
-        };
-        xhr.onerror = function() {
-            progressBar.style.display = 'none';
-            progressBar.value = 0;
-            status.textContent = 'Upload failed.';
-        };
+        let totalBytes = 0;
+        let uploadedBytes = 0;
+        for (const file of fileList) {
+            totalBytes += file.size;
+        }
         progressBar.value = 0;
+        progressBar.max = 100;
         progressBar.style.display = '';
         status.textContent = 'Uploading...';
-        xhr.send(formData);
+        for (const file of fileList) {
+            const uploadId = Math.random().toString(36).slice(2) + Date.now();
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+                const start = chunkIdx * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+                const formData = new FormData();
+                formData.append('chunk', chunk);
+                formData.append('file_name', file.webkitRelativePath || file.name);
+                formData.append('upload_id', uploadId);
+                formData.append('chunk_index', chunkIdx);
+                formData.append('total_chunks', totalChunks);
+                formData.append('folder_id', folderId);
+                await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/upload', true);
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            uploadedBytes += chunk.size;
+                            progressBar.value = Math.round((uploadedBytes / totalBytes) * 100);
+                            resolve();
+                        } else {
+                            status.textContent = 'Upload failed.';
+                            progressBar.style.display = 'none';
+                            reject(xhr.responseText);
+                        }
+                    };
+                    xhr.onerror = function() {
+                        status.textContent = 'Upload failed.';
+                        progressBar.style.display = 'none';
+                        reject('Network error');
+                    };
+                    xhr.send(formData);
+                });
+            }
+        }
+        progressBar.style.display = 'none';
+        progressBar.value = 0;
+        status.textContent = 'Upload complete.';
+        // Auto-refresh file list after upload
+        const filesList = window.parent ? window.parent.document.getElementById('files-list') : document.getElementById('files-list');
+        if (filesList) {
+            if (window.parent && window.parent.htmx) {
+                window.parent.htmx.trigger(filesList, 'refresh');
+            } else if (window.htmx) {
+                window.htmx.trigger(filesList, 'refresh');
+            } else {
+                window.location.reload();
+            }
+        }
     }
 }
 customElements.define('file-uploader', FileUploader);

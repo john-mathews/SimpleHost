@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +35,12 @@ func getUniqueFilename(dir, filename string) string {
 	}
 }
 
-// UploadHandler handles file uploads and saves them to the simplehostdata directory
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+// UploadHandler handles file uploads (chunked and non-chunked)
 func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -53,14 +59,97 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Chunked upload: check for chunk fields
+	chunkFile, _, chunkErr := r.FormFile("chunk")
+	fileName := r.FormValue("file_name")
+	uploadId := r.FormValue("upload_id")
+	chunkIdx := r.FormValue("chunk_index")
+	totalChunks := r.FormValue("total_chunks")
+	folderId := r.FormValue("folder_id")
+
+	if chunkErr == nil && fileName != "" && uploadId != "" && chunkIdx != "" && totalChunks != "" {
+		// Handle chunked upload
+		defer chunkFile.Close()
+		tmpDir := filepath.Join(uploadDir, ".chunks", uploadId)
+		if err := os.MkdirAll(tmpDir, os.ModePerm); err != nil {
+			http.Error(w, "Could not create chunk dir", http.StatusInternalServerError)
+			return
+		}
+		chunkPath := filepath.Join(tmpDir, chunkIdx)
+		out, err := os.Create(chunkPath)
+		if err != nil {
+			http.Error(w, "Could not create chunk file", http.StatusInternalServerError)
+			return
+		}
+		if _, err := io.Copy(out, chunkFile); err != nil {
+			out.Close()
+			http.Error(w, "Could not write chunk", http.StatusInternalServerError)
+			return
+		}
+		out.Close()
+		// If last chunk, assemble
+		if chunkIdx == fmt.Sprintf("%d", atoi(totalChunks)-1) {
+			finalPath := filepath.Join(uploadDir, getUniqueFilename(uploadDir, fileName))
+			finalOut, err := os.Create(finalPath)
+			if err != nil {
+				http.Error(w, "Could not create final file", http.StatusInternalServerError)
+				return
+			}
+			for i := 0; i < atoi(totalChunks); i++ {
+				chunkPath := filepath.Join(tmpDir, fmt.Sprintf("%d", i))
+				in, err := os.Open(chunkPath)
+				if err != nil {
+					finalOut.Close()
+					http.Error(w, "Missing chunk", http.StatusInternalServerError)
+					return
+				}
+				if _, err := io.Copy(finalOut, in); err != nil {
+					in.Close()
+					finalOut.Close()
+					http.Error(w, "Error assembling file", http.StatusInternalServerError)
+					return
+				}
+				in.Close()
+			}
+			finalOut.Close()
+			os.RemoveAll(tmpDir)
+			// Insert file record
+			claims, _ := r.Context().Value("claims").(map[string]any)
+			ownerID := ""
+			if claims != nil {
+				if userId, ok := claims["userId"].(string); ok {
+					ownerID = userId
+				}
+			}
+			if ownerID == "" {
+				http.Error(w, "Unauthorized: No valid user found", http.StatusUnauthorized)
+				return
+			}
+			fileRecord := models.File{
+				ID:           fileName + "-" + uploadId,
+				Name:         fileName,
+				FolderID:     folderId,
+				StoragePath:  finalPath,
+				OwnerID:      ownerID,
+				UploadedDate: time.Now(),
+				IsPrivate:    false,
+			}
+			_ = models.InsertFile(fileRecord)
+			fmt.Fprintf(w, "Uploaded: %s\n", fileName)
+			return
+		}
+		fmt.Fprintf(w, "Chunk %s uploaded\n", chunkIdx)
+		return
+	}
+
+	// Fallback: non-chunked upload (legacy, for small files)
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
 		http.Error(w, "No file uploaded", http.StatusBadRequest)
 		return
 	}
 
-	// Map to keep track of created folders: relative path -> folder ID
-	createdFolders := map[string]string{"": r.FormValue("folder_id")}
+	createdFolders := map[string]string{"": folderId}
 	if createdFolders[""] == "" {
 		createdFolders[""] = "root"
 	}
@@ -89,7 +178,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if ownerID == "" {
-			//logout because we don't have a valid user
 			http.Error(w, "Unauthorized: No valid user found", http.StatusUnauthorized)
 			return
 		}

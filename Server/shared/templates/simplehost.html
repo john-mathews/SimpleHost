@@ -29,7 +29,7 @@
     </div>
     <div id="files-list" class="files-container"
         hx-get="/api/files-list?folderId=root"
-        hx-trigger="load"
+        hx-trigger="load,refresh from:body"
         hx-target="#files-list"
         hx-swap="innerHTML">
         <!-- Files will be listed here -->

@@ -24,3 +24,9 @@ View images and videos
 preview other files as well
 
 move files to new folders
+
+Show memory available on server
+    
+Upload folders
+
+Progress bar

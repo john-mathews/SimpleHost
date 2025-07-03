@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"simplehost-server/controllers"
 	"simplehost-server/models"
@@ -39,13 +40,35 @@ func initDB() *sql.DB {
 	return db
 }
 
+func getUploaderJSVersion() string {
+	// Try to get the mod time of uploader.js from the embedded FS
+	info, err := fs.Stat(shared.StaticFS, "templates/uploader.js")
+	if err == nil {
+		return info.ModTime().Format("20060102150405") // yyyymmddhhmmss
+	}
+	return time.Now().Format("20060102150405") // fallback: current time
+}
+
+func mergeData(data any, extra map[string]any) map[string]any {
+	m, ok := data.(map[string]any)
+	if !ok {
+		m = map[string]any{"Data": data}
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return m
+}
+
 func render(w http.ResponseWriter, _ *http.Request, name string, data any) {
 	tmpl, err := template.New("").ParseFS(shared.TemplatesFS, templateFolderPath+"/"+name, templateFolderPath+"/base.html")
 	if err != nil {
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
-	err = tmpl.ExecuteTemplate(w, "base", data)
+	version := getUploaderJSVersion()
+	merged := mergeData(data, map[string]any{"UploaderJSVersion": version})
+	err = tmpl.ExecuteTemplate(w, "base", merged)
 	if err != nil {
 		http.Error(w, "Error executing template", http.StatusInternalServerError)
 		return

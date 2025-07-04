@@ -11,29 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"simplehost-server/models"
 )
 
 const uploadDir = "simplehostdata"
-
-// getUniqueFilename returns a unique filename in the directory by appending (n) if needed
-func getUniqueFilename(dir, filename string) string {
-	base := filename
-	ext := ""
-	if dot := strings.LastIndex(filename, "."); dot != -1 {
-		base = filename[:dot]
-		ext = filename[dot:]
-	}
-	unique := filename
-	count := 1
-	for {
-		if _, err := os.Stat(filepath.Join(dir, unique)); os.IsNotExist(err) {
-			return unique
-		}
-		unique = fmt.Sprintf("%s(%d)%s", base, count, ext)
-		count++
-	}
-}
 
 func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
@@ -66,8 +49,29 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	chunkIdx := r.FormValue("chunk_index")
 	totalChunks := r.FormValue("total_chunks")
 	folderId := r.FormValue("folder_id")
+	overwrite := r.FormValue("overwrite") == "true"
 
 	if chunkErr == nil && fileName != "" && uploadId != "" && chunkIdx != "" && totalChunks != "" {
+		// Generate file ID for this upload (use uploadId for all chunks, but only save on last chunk)
+		fileID := uploadId
+		file, err := models.GetFileByFolderAndName(folderId, fileName)
+
+		// Check for existing file on first chunk
+		if err == nil && file != nil {
+			if chunkIdx == "0" {
+				// File already exists, return conflict if not overwriting
+				if _, err := os.Stat(file.StoragePath); err == nil && !overwrite {
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte("EXISTS"))
+					return
+				}
+			}
+			// If not the first chunk, we don't care about existing files
+		} else if err != nil {
+			http.Error(w, "Error checking existing file", http.StatusInternalServerError)
+			return
+		}
+
 		// Handle chunked upload
 		defer chunkFile.Close()
 		tmpDir := filepath.Join(uploadDir, ".chunks", uploadId)
@@ -89,7 +93,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		out.Close()
 		// If last chunk, assemble
 		if chunkIdx == fmt.Sprintf("%d", atoi(totalChunks)-1) {
-			finalPath := filepath.Join(uploadDir, getUniqueFilename(uploadDir, fileName))
+			finalPath := filepath.Join(uploadDir, fileID)
 			finalOut, err := os.Create(finalPath)
 			if err != nil {
 				http.Error(w, "Could not create final file", http.StatusInternalServerError)
@@ -126,7 +130,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			fileRecord := models.File{
-				ID:           fileName + "-" + uploadId,
+				ID:           fileID,
 				Name:         fileName,
 				FolderID:     folderId,
 				StoragePath:  finalPath,
@@ -134,8 +138,20 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 				UploadedDate: time.Now(),
 				IsPrivate:    false,
 			}
-			_ = models.InsertFile(fileRecord)
+			err = models.InsertFile(fileRecord)
+			if err != nil {
+				http.Error(w, "Error saving file record", http.StatusInternalServerError)
+				return
+			}
 			fmt.Fprintf(w, "Uploaded: %s\n", fileName)
+			if file != nil {
+				err = models.DeleteFileByID(file.ID)
+				if err != nil {
+					http.Error(w, "Error deleting old file record", http.StatusInternalServerError)
+					return
+				}
+			}
+
 			return
 		}
 		fmt.Fprintf(w, "Chunk %s uploaded\n", chunkIdx)
@@ -209,8 +225,13 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		uniqueName := getUniqueFilename(uploadDir, fileHeader.Filename)
-		dstPath := filepath.Join(uploadDir, uniqueName)
+		fileID := uuid.NewString()
+		dstPath := filepath.Join(uploadDir, fileID)
+		if _, err := os.Stat(dstPath); err == nil && !overwrite {
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte("EXISTS"))
+			return
+		}
 		dst, err := os.Create(dstPath)
 		if err != nil {
 			http.Error(w, "Error saving file", http.StatusInternalServerError)
@@ -224,8 +245,8 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fileRecord := models.File{
-			ID:           uniqueName, // Use uniqueName as ID for now, or use uuid if available
-			Name:         uniqueName,
+			ID:           fileID,
+			Name:         fileHeader.Filename,
 			FolderID:     parentID,
 			StoragePath:  dstPath,
 			OwnerID:      ownerID,
@@ -234,6 +255,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = models.InsertFile(fileRecord)
 
-		fmt.Fprintf(w, "Uploaded: %s\n", uniqueName)
+		fmt.Fprintf(w, "Uploaded: %s\n", fileHeader.Filename)
 	}
 }

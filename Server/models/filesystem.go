@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"os"
 	"time"
 )
 
@@ -182,4 +183,40 @@ func GetFileByID(fileID string) (*File, error) {
 	}
 	file.UploadedDate = uploaded
 	return &file, nil
+}
+
+// GetFileByFolderAndName returns a file in a given folder by its name, or nil if not found
+func GetFileByFolderAndName(folderID, fileName string) (*File, error) {
+	var file File
+	var uploaded time.Time
+	err := db.QueryRow(`SELECT id, name, folder_id, storage_path, owner_id, uploaded_date, is_private FROM files WHERE folder_id = ? AND name = ?`, folderID, fileName).
+		Scan(&file.ID, &file.Name, &file.FolderID, &file.StoragePath, &file.OwnerID, &uploaded, &file.IsPrivate)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	file.UploadedDate = uploaded
+	return &file, nil
+}
+
+// DeleteFileByID deletes a file by its ID: removes the file from disk and deletes the DB record
+func DeleteFileByID(fileID string) error {
+	file, err := GetFileByID(fileID)
+	if err != nil {
+		return err
+	}
+	if file == nil {
+		return nil // Already gone
+	}
+	// Remove file from disk
+	if file.StoragePath != "" {
+		if removeErr := os.Remove(file.StoragePath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return removeErr
+		}
+	}
+	// Remove from DB
+	_, err = db.Exec(`DELETE FROM files WHERE id = ?`, fileID)
+	return err
 }

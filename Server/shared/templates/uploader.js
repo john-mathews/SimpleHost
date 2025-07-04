@@ -98,10 +98,15 @@ class FileUploader extends HTMLElement {
         progressBar.max = 100;
         progressBar.style.display = '';
         status.textContent = 'Uploading...';
+        // Track bulk conflict choice
+        let conflictChoice = null; // 'overwrite', 'skip', 'overwriteAll', 'skipAll'
         for (const file of fileList) {
             const uploadId = Math.random().toString(36).slice(2) + Date.now();
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            let skipFile = false;
+            let overwrite = false;
             for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+                if (skipFile) break;
                 const start = chunkIdx * CHUNK_SIZE;
                 const end = Math.min(start + CHUNK_SIZE, file.size);
                 const chunk = file.slice(start, end);
@@ -112,14 +117,108 @@ class FileUploader extends HTMLElement {
                 formData.append('chunk_index', chunkIdx);
                 formData.append('total_chunks', totalChunks);
                 formData.append('folder_id', folderId);
+                if (overwrite || conflictChoice === 'overwriteAll') formData.append('overwrite', 'true');
                 await new Promise((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', '/api/upload', true);
-                    xhr.onload = function() {
+                    xhr.onload = async function() {
                         if (xhr.status === 200) {
                             uploadedBytes += chunk.size;
                             progressBar.value = Math.round((uploadedBytes / totalBytes) * 100);
                             resolve();
+                        } else if (xhr.status === 409 && xhr.responseText === 'EXISTS') {
+                            if (chunkIdx === 0) {
+                                if (conflictChoice === 'overwriteAll') {
+                                    overwrite = true;
+                                    formData.set('overwrite', 'true');
+                                    const retryXhr = new XMLHttpRequest();
+                                    retryXhr.open('POST', '/api/upload', true);
+                                    retryXhr.onload = function() {
+                                        if (retryXhr.status === 200) {
+                                            uploadedBytes += chunk.size;
+                                            progressBar.value = Math.round((uploadedBytes / totalBytes) * 100);
+                                            resolve();
+                                        } else {
+                                            status.textContent = 'Upload failed.';
+                                            progressBar.style.display = 'none';
+                                            reject(retryXhr.responseText);
+                                        }
+                                    };
+                                    retryXhr.onerror = function() {
+                                        status.textContent = 'Upload failed.';
+                                        progressBar.style.display = 'none';
+                                        reject('Network error');
+                                    };
+                                    retryXhr.send(formData);
+                                } else if (conflictChoice === 'skipAll') {
+                                    skipFile = true;
+                                    resolve();
+                                } else {
+                                    // Show custom dialog for this file
+                                    const userChoice = await window.showFileConflictDialogBulk?.(file.name) || await window.showFileConflictDialog(file.name);
+                                    if (userChoice === 'overwrite') {
+                                        overwrite = true;
+                                        formData.set('overwrite', 'true');
+                                        const retryXhr = new XMLHttpRequest();
+                                        retryXhr.open('POST', '/api/upload', true);
+                                        retryXhr.onload = function() {
+                                            if (retryXhr.status === 200) {
+                                                uploadedBytes += chunk.size;
+                                                progressBar.value = Math.round((uploadedBytes / totalBytes) * 100);
+                                                resolve();
+                                            } else {
+                                                status.textContent = 'Upload failed.';
+                                                progressBar.style.display = 'none';
+                                                reject(retryXhr.responseText);
+                                            }
+                                        };
+                                        retryXhr.onerror = function() {
+                                            status.textContent = 'Upload failed.';
+                                            progressBar.style.display = 'none';
+                                            reject('Network error');
+                                        };
+                                        retryXhr.send(formData);
+                                    } else if (userChoice === 'overwriteAll') {
+                                        conflictChoice = 'overwriteAll';
+                                        overwrite = true;
+                                        formData.set('overwrite', 'true');
+                                        const retryXhr = new XMLHttpRequest();
+                                        retryXhr.open('POST', '/api/upload', true);
+                                        retryXhr.onload = function() {
+                                            if (retryXhr.status === 200) {
+                                                uploadedBytes += chunk.size;
+                                                progressBar.value = Math.round((uploadedBytes / totalBytes) * 100);
+                                                resolve();
+                                            } else {
+                                                status.textContent = 'Upload failed.';
+                                                progressBar.style.display = 'none';
+                                                reject(retryXhr.responseText);
+                                            }
+                                        };
+                                        retryXhr.onerror = function() {
+                                            status.textContent = 'Upload failed.';
+                                            progressBar.style.display = 'none';
+                                            reject('Network error');
+                                        };
+                                        retryXhr.send(formData);
+                                    } else if (userChoice === 'skip') {
+                                        skipFile = true;
+                                        resolve();
+                                    } else if (userChoice === 'skipAll') {
+                                        conflictChoice = 'skipAll';
+                                        skipFile = true;
+                                        resolve();
+                                    } else {
+                                        // Default: skip
+                                        skipFile = true;
+                                        resolve();
+                                    }
+                                }
+                            } else {
+                                // Should not happen, but skip if so
+                                skipFile = true;
+                                resolve();
+                            }
                         } else {
                             status.textContent = 'Upload failed.';
                             progressBar.style.display = 'none';
@@ -152,3 +251,34 @@ class FileUploader extends HTMLElement {
     }
 }
 customElements.define('file-uploader', FileUploader);
+// Helper for custom dialog (can be replaced with a better UI)
+window.showFileConflictDialogBulk = async function(filename) {
+    return new Promise((resolve) => {
+        // Create modal
+        let modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
+        modal.style.background = 'rgba(0,0,0,0.4)';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.zIndex = '9999';
+        modal.innerHTML = `
+            <div style="background:#fff;padding:2em;border-radius:8px;max-width:90vw;text-align:center;box-shadow:0 2px 12px #0002;">
+                <div style="margin-bottom:1em;font-size:1.1em;">File '<b>${filename}</b>' already exists.<br>What do you want to do?</div>
+                <button id="owBtn">Overwrite</button>
+                <button id="skBtn">Skip</button>
+                <button id="owAllBtn">Overwrite All</button>
+                <button id="skAllBtn">Skip All</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector('#owBtn').onclick = () => { document.body.removeChild(modal); resolve('overwrite'); };
+        modal.querySelector('#skBtn').onclick = () => { document.body.removeChild(modal); resolve('skip'); };
+        modal.querySelector('#owAllBtn').onclick = () => { document.body.removeChild(modal); resolve('overwriteAll'); };
+        modal.querySelector('#skAllBtn').onclick = () => { document.body.removeChild(modal); resolve('skipAll'); };
+    });
+};

@@ -4,12 +4,78 @@
     {{template "folder_item_partial.html" .}}
   {{end}}
   {{range .Files}}
-    <div class="file-item">
+    <div class="file-item" style="display:flex; flex-direction: row">
       <a href="/api/download?fileId={{.ID}}" class="download-link" title="Download" style="display: flex; align-items: center; width: 100%; text-decoration: none; color: inherit;">
         <span class="icon">📄</span>
-        <span class="name">{{.Name}}</span>
+        <span class="name" style="flex:1;">{{.Name}}</span>
         <span>⬇️</span>
       </a>
+      {{if .CanDelete}}
+      <button class="delete-file-btn" data-file-id="{{.ID}}" data-file-name="{{.Name}}" title="Delete" style="display:flex;padding:0 0.3em;margin-left:0.3em;font-size:0.9em;line-height:1.2em;height:1.5em;width:1.5em;background:none;border:none;color:#c00;vertical-align:middle;cursor:pointer;">🗑️</button>
+      {{end}}
     </div>
   {{end}}
 </div>
+<script>
+function showFolderDeleteDialog(folderName, onChoice) {
+  document.querySelectorAll('.folder-delete-modal').forEach(m => m.remove());
+  let modal = document.createElement('div');
+  modal.className = 'folder-delete-modal';
+  modal.style.position = 'fixed';
+  modal.style.top = '0';
+  modal.style.left = '0';
+  modal.style.width = '100vw';
+  modal.style.height = '100vh';
+  modal.style.background = 'rgba(0,0,0,0.4)';
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.zIndex = '9999';
+  modal.innerHTML = `
+    <div style="background:#fff;padding:2em;border-radius:8px;max-width:90vw;text-align:center;box-shadow:0 2px 12px #0002;">
+      <div style="margin-bottom:1em;font-size:1.1em;">Delete folder '<b>${folderName}</b>'?</div>
+      <div style="margin-bottom:1em;">Choose an option:</div>
+      <button id="del-folder-btn">Delete Only Folder</button>
+      <button id="del-all-btn">Delete All Files & Subfolders</button>
+      <button id="cancel-del-btn">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector('#del-folder-btn').onclick = () => { document.body.removeChild(modal); onChoice('folder'); };
+  modal.querySelector('#del-all-btn').onclick = () => { document.body.removeChild(modal); onChoice('all'); };
+  modal.querySelector('#cancel-del-btn').onclick = () => { document.body.removeChild(modal); };
+}
+function attachDeleteHandlers() {
+  document.querySelectorAll('.delete-file-btn').forEach(btn => {
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      const fileId = btn.getAttribute('data-file-id');
+      const fileName = btn.getAttribute('data-file-name');
+      if (confirm(`Are you sure you wish to delete ${fileName}?`)) {
+        fetch(`/api/file/${fileId}`, { method: 'DELETE' })
+          .then(r => r.ok ? location.reload() : r.text().then(alert));
+      }
+    };
+  });
+  document.querySelectorAll('.delete-folder-btn').forEach(btn => {
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      const folderId = btn.getAttribute('data-folder-id');
+      const folderName = btn.getAttribute('data-folder-name');
+      showFolderDeleteDialog(folderName, function(choice) {
+        if (choice === 'folder' || choice === 'all') {
+          fetch('/api/folder/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_id: folderId, mode: choice })
+          }).then(r => r.ok ? location.reload() : r.text().then(alert));
+        }
+      });
+    };
+  });
+}
+attachDeleteHandlers();
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+  attachDeleteHandlers();
+});
+</script>

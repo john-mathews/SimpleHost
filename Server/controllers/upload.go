@@ -144,8 +144,9 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			fmt.Fprintf(w, "Uploaded: %s\n", fileName)
-			if file != nil {
-				err = models.DeleteFileByID(file.ID)
+			//Not Ideal but for now same file name can be in same folder if they have different owners
+			if file != nil && file.OwnerID == ownerID {
+				err = models.DeleteFileByID(file.ID, ownerID)
 				if err != nil {
 					http.Error(w, "Error deleting old file record", http.StatusInternalServerError)
 					return

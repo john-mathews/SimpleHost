@@ -172,3 +172,14 @@ func getUserClaims(r *http.Request) (map[string]any, error) {
 	}
 	return claims, nil
 }
+
+func GetUserIDFromRequest(r *http.Request) string {
+	claims, _ := r.Context().Value("claims").(map[string]any)
+	userID := ""
+	if claims != nil {
+		if id, ok := claims["userId"].(string); ok {
+			userID = id
+		}
+	}
+	return userID
+}

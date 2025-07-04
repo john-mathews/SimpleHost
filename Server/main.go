@@ -167,6 +167,9 @@ func main() {
 		render(w, r, "404.html", nil)
 	}))
 
+	router.HandleFunc("/api/file/", controllers.AuthMiddleware(controllers.DeleteFileHandler))
+	router.HandleFunc("/api/folder/delete", controllers.AuthMiddleware(controllers.DeleteFolderHandler))
+
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", router)
 }

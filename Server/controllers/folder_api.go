@@ -70,7 +70,12 @@ func FolderListPartialHandler(w http.ResponseWriter, r *http.Request) {
 		"Files":           files,
 		"CurrentFolderID": folderID,
 	}
-	tmpl.Execute(w, data)
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("<div class='error'>Template error</div>"))
+		return
+	}
 }
 
 // CreateFolderAPIHandler creates a new folder as a child of the given parent folder
@@ -109,6 +114,7 @@ func CreateFolderAPIHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+	folder.CanDelete = true // If you created it you are the owner so you can delete it
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl, err := template.ParseFS(shared.TemplatesFS, "templates/folder_item_partial.html")
 	if err != nil {
